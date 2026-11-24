@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Library System</title>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body {
+      margin: 0; padding: 20px;
+      background: #0f172a; color: #f8fafc;
+      display: flex; flex-direction: column; align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      width: 100%; max-width: 720px;
+      background: #1e293b; padding: 25px;
+      border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+    .header {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 20px;
+    }
+    h1 { margin: 0; font-size: 1.6rem; color: #38bdf8; }
+    .admin-toggle {
+      background: #334155; color: #f8fafc; border: none;
+      padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600;
+    }
+    .admin-toggle:hover { background: #475569; }
+
+    /* Display Box */
+    .display-box {
+      background: #0f172a; border: 2px solid #38bdf8;
+      border-radius: 12px; padding: 20px; text-align: center;
+      margin-bottom: 25px;
+    }
+    .display-box p { margin: 5px 0; color: #94a3b8; font-size: 0.95rem; }
+    .display-box h2 { margin: 8px 0; font-size: 1.8rem; color: #22c55e; }
+    .status-badge {
+      display: inline-block; margin-top: 8px; padding: 4px 12px;
+      background: #1e293b; border-radius: 20px; font-size: 0.85rem; color: #eab308;
+    }
+
+    /* Subject Buttons Grid */
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+    }
+    .sub-btn {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white; border: none; padding: 20px 15px;
+      border-radius: 12px; font-size: 1.1rem; font-weight: bold;
+      cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .sub-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(37, 99, 235, 0.4); }
+    .sub-btn span { font-size: 0.85rem; font-weight: normal; color: #bfdbfe; }
+
+    .off-btn {
+      margin-top: 18px; width: 100%; background: #dc2626; color: white;
+      border: none; padding: 12px; border-radius: 10px; font-weight: bold;
+      cursor: pointer; font-size: 0.95rem;
+    }
+    .off-btn:hover { background: #b91c1c; }
+
+    /* Admin Panel */
+    .admin-panel {
+      display: none; margin-top: 25px; padding-top: 20px;
+      border-top: 2px dashed #475569;
+    }
+    .admin-panel h3 { margin-top: 0; color: #fbbf24; }
+    .form-row {
+      display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;
+    }
+    input {
+      flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #475569;
+      background: #0f172a; color: white; font-size: 0.95rem;
+    }
+    .add-btn {
+      background: #16a34a; color: white; border: none;
+      padding: 10px 18px; border-radius: 8px; font-weight: bold; cursor: pointer;
+    }
+    .edit-item {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 10px;
+      background: #0f172a; padding: 10px; border-radius: 8px;
+    }
+    .save-btn { background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+    .del-btn { background: #dc2626; color: white; border: none; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>📚 Smart Library</h1>
+    <button class="admin-toggle" onclick="toggleAdmin()">⚙️ Admin Panel</button>
+  </div>
+
+  <!-- Live Result Display -->
+  <div class="display-box">
+    <p>Selected Subject & Book Location</p>
+    <h2 id="selectedInfo">Select a Subject Below</h2>
+    <div class="status-badge" id="dbStatus">Connecting to Database...</div>
+  </div>
+
+  <!-- User Subject Buttons -->
+  <div class="grid" id="buttonsGrid"></div>
+
+  <button class="off-btn" onclick="turnOffLight()">Turn Off Block Light (Reset)</button>
+
+  <!-- Admin Section -->
+  <div class="admin-panel" id="adminPanel">
+    <h3>🛠️ Admin Controls (Auto-Syncs to Database)</h3>
+    
+    <!-- Add New Button -->
+    <div class="form-row">
+      <input type="text" id="newSub" placeholder="New Subject (e.g. Biology)" />
+      <input type="text" id="newBlock" placeholder="Block Address (e.g. Block E)" />
+      <button class="add-btn" onclick="addButton()">+ Add Button</button>
+    </div>
+
+    <!-- Edit Existing Buttons -->
+    <p style="color:#94a3b8; font-size:0.9rem;">Edit Existing Buttons:</p>
+    <div id="editList"></div>
+  </div>
+</div>
+
+<script>
+  // Aapka Firebase Realtime Database Link
+  const DB_URL = "https://smart-library-9ccc0-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+  // Default 4 Buttons (agar database khali ho toh)
+  let buttonsData = [
+    { subject: "Physics", block: "Block A" },
+    { subject: "Chemistry", block: "Block B" },
+    { subject: "Maths", block: "Block C" },
+    { subject: "Computer", block: "Block D" }
+  ];
+
+  // Page load hote hi Firebase se buttons load karein
+  async function loadButtons() {
+    try {
+      const res = await fetch(`${DB_URL}/buttons.json`);
+      const data = await res.json();
+
+      if (data && Array.isArray(data) && data.length > 0) {
+        buttonsData = data.filter(item => item !== null);
+      } else {
+        // Agar database mein /buttons nahi hai toh default save kar dein
+        await saveButtonsToDB();
+      }
+      renderUI();
+      document.getElementById("dbStatus").innerText = "Connected to Firebase ✅";
+    } catch (err) {
+      document.getElementById("dbStatus").innerText = "Database Error! Check Rules ❌";
+      renderUI();
+    }
+  }
+
+  // Buttons ko UI aur Admin list mein dikhayein
+  function renderUI() {
+    const grid = document.getElementById("buttonsGrid");
+    const editList = document.getElementById("editList");
+    grid.innerHTML = "";
+    editList.innerHTML = "";
+
+    buttonsData.forEach((item, index) => {
+      // User button
+      const btn = document.createElement("button");
+      btn.className = "sub-btn";
+      btn.innerHTML = `${item.subject} <span>${item.block}</span>`;
+      btn.onclick = () => selectSubject(item.subject, item.block);
+      grid.appendChild(btn);
+
+      // Admin edit row
+      const row = document.createElement("div");
+      row.className = "edit-item";
+      row.innerHTML = `
+        <input type="text" id="sub-${index}" value="${item.subject}" />
+        <input type="text" id="blk-${index}" value="${item.block}" />
+        <button class="save-btn" onclick="updateButton(${index})">Save</button>
+        <button class="del-btn" onclick="deleteButton(${index})">X</button>
+      `;
+      editList.appendChild(row);
+    });
+  }
+
+  // User jab kisi Subject par click kare
+  async function selectSubject(subject, block) {
+    document.getElementById("selectedInfo").innerText = `${subject} → ${block}`;
+    document.getElementById("dbStatus").innerText = "Sending signal to ESP32...";
+
+    const payload = {
+      subject: subject,
+      block: block,
+      led_state: true,
+      beep: true
+    };
+
+    try {
+      await fetch(`${DB_URL}/library.json`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      document.getElementById("dbStatus").innerText = `LED ON & Beep Sent for ${block} 🔔`;
+
+      // 1.5 second baad beep ko false kar dein taaki buzzer baar-baar na baje
+      setTimeout(async () => {
+        await fetch(`${DB_URL}/library/beep.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(false)
+        });
+      }, 1500);
+    } catch (err) {
+      document.getElementById("dbStatus").innerText = "Failed to update database ❌";
+    }
+  }
+
+  // LED off karne ke liye
+  async function turnOffLight() {
+    document.getElementById("selectedInfo").innerText = "All Lights OFF";
+    await fetch(`${DB_URL}/library/led_state.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(false)
+    });
+    document.getElementById("dbStatus").innerText = "Block LED Turned OFF";
+  }
+
+  // Admin Panel Password Check (PIN: 1234)
+  function toggleAdmin() {
+    const panel = document.getElementById("adminPanel");
+    if (panel.style.display === "block") {
+      panel.style.display = "none";
+      return;
+    }
+    const pin = prompt("Enter Admin PIN (Default: 1234):");
+    if (pin === "1234") {
+      panel.style.display = "block";
+    } else if (pin !== null) {
+      alert("Wrong PIN!");
+    }
+  }
+
+  // Admin: Naya Button Add Karein
+  async function addButton() {
+    const sub = document.getElementById("newSub").value.trim();
+    const blk = document.getElementById("newBlock").value.trim();
+    if (!sub || !blk) return alert("Dono fields bharein!");
+
+    buttonsData.push({ subject: sub, block: blk });
+    document.getElementById("newSub").value = "";
+    document.getElementById("newBlock").value = "";
+    await saveButtonsToDB();
+    renderUI();
+  }
+
+  // Admin: Purana Button Edit Karein
+  async function updateButton(index) {
+    const sub = document.getElementById(`sub-${index}`).value.trim();
+    const blk = document.getElementById(`blk-${index}`).value.trim();
+    if (!sub || !blk) return alert("Name aur Block khali nahi ho sakte!");
+
+    buttonsData[index] = { subject: sub, block: blk };
+    await saveButtonsToDB();
+    renderUI();
+    alert("Button Updated!");
+  }
+
+  // Admin: Button Delete Karein
+  async function deleteButton(index) {
+    if (buttonsData.length <= 1) return alert("Kam se kam 1 button hona zaroori hai!");
+    buttonsData.splice(index, 1);
+    await saveButtonsToDB();
+    renderUI();
+  }
+
+  // Firebase mein /buttons list save karein
+  async function saveButtonsToDB() {
+    await fetch(`${DB_URL}/buttons.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buttonsData)
+    });
+  }
+
+  loadButtons();
+</script>
+
+</body>
+</html>
